@@ -5,22 +5,30 @@ from flask import Flask, request, render_template_string, jsonify
 
 # --- UDP Listener ---
 UDP_IP = "0.0.0.0"
-UDP_PORT = 5050
+UDP_PORT = 5051
 
 def udp_listener():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
-    print(f"Listening for UDP commands on port {UDP_PORT}...")
+    print(f"Listening for UDP commands on port {UDP_PORT}...", flush=True)
+    
     while True:
-        data, addr = sock.recvfrom(1024)
-        cmd = data.decode().strip().upper()
-        print(f"UDP command: {cmd} from {addr}")
-        if cmd == "NEXT":
-            pyautogui.press('right')
-        elif cmd == "PREV":
-            pyautogui.press('left')
-        elif cmd == "PING":
-            sock.sendto(b"PONG", addr)
+        try:
+            data, addr = sock.recvfrom(1024)
+            cmd = data.decode().strip().upper()
+            print(f"UDP command: {cmd} from {addr}", flush=True)
+            if cmd == "NEXT":
+                pyautogui.press('right')
+            elif cmd == "PREV":
+                pyautogui.press('left')
+            elif cmd == "PING":
+                try:
+                    sock.sendto(b"PONG", addr)
+                except Exception as e:
+                    print(f"Failed to send PONG: {e}", flush=True)
+        except Exception as e:
+            print(f"UDP Listener error: {e}", flush=True)
+
 
 udp_thread = threading.Thread(target=udp_listener, daemon=True)
 udp_thread.start()

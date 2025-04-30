@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPainter
 
 SERVER_IP = '127.0.0.1'  # <-- CHANGE THIS to your server's IP!
-SERVER_PORT = 5050
+SERVER_PORT = 5051
 
 def check_server():
     try:
