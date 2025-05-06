@@ -52,14 +52,15 @@ def send_command(cmd):
 # --- Check if PowerPoint is in presentation mode ---
 def is_powerpoint_in_slideshow():
     try:
-        win = gw.getActiveWindow()
-        return win and 'PowerPoint Slide Show' in win.title
-    except:
+        return ppt.SlideShowWindows.Count > 0
+    except Exception as e:
+        print(f"[CHECK ERROR] {e}")
         return False
 
 # --- Global Arrow Key Listener ---
 def listen_for_keys():
     def on_key(event):
+        print(f"[KEY] {event.name}")  # Debug log
         if is_powerpoint_in_slideshow():
             if event.name == 'left':
                 send_command('PREV')
@@ -160,6 +161,8 @@ class PPTControl(QWidget):
         if is_powerpoint_in_slideshow():
             send_command(cmd)
             get_server_slide()
+        else:
+            print("[INFO] PowerPoint is not in slideshow mode.")
 
     def enterEvent(self, event):
         self.show()
