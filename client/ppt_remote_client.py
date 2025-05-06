@@ -60,8 +60,8 @@ def listen_for_keys():
             get_server_slide()
 
     keyboard.on_press(on_key)
-    keyboard.block_key('left')
-    keyboard.block_key('right')
+    #--keyboard.block_key('left')
+    #--keyboard.block_key('right')
     while True:
         time.sleep(1)
 
