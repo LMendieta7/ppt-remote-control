@@ -5,6 +5,7 @@ import threading
 import time
 import keyboard
 import win32com.client
+import pygetwindow as gw
 
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QHBoxLayout, QLabel
 from PyQt5.QtCore import Qt, QTimer
@@ -13,7 +14,6 @@ from PyQt5.QtGui import QColor, QPainter
 # --- CONFIG ---
 SERVER_IP = '192.168.1.100'  # Change this to your server's IP
 SERVER_PORT = 5051
-AUTOHIDE_TIMEOUT_MS = 10000
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 ppt = win32com.client.Dispatch("PowerPoint.Application")
@@ -49,19 +49,26 @@ def send_command(cmd):
     except Exception as e:
         print(f"[UDP ERROR] {e}")
 
+# --- Check if PowerPoint is in presentation mode ---
+def is_powerpoint_in_slideshow():
+    try:
+        win = gw.getActiveWindow()
+        return win and 'PowerPoint Slide Show' in win.title
+    except:
+        return False
+
 # --- Global Arrow Key Listener ---
 def listen_for_keys():
     def on_key(event):
-        if event.name == 'left':
-            send_command('PREV')
-            get_server_slide()
-        elif event.name == 'right':
-            send_command('NEXT')
-            get_server_slide()
+        if is_powerpoint_in_slideshow():
+            if event.name == 'left':
+                send_command('PREV')
+                get_server_slide()
+            elif event.name == 'right':
+                send_command('NEXT')
+                get_server_slide()
 
     keyboard.on_press(on_key)
-    #--keyboard.block_key('left')
-    #--keyboard.block_key('right')
     while True:
         time.sleep(1)
 
@@ -99,7 +106,7 @@ class PPTControl(QWidget):
         hbox = QHBoxLayout()
         hbox.setSpacing(10)
 
-        self.led = StatusLED('green', self)
+        self.led = StatusLED('red', self)
         hbox.addWidget(self.led)
 
         style = '''
@@ -138,21 +145,27 @@ class PPTControl(QWidget):
         hbox.addWidget(btn_close)
         self.setLayout(hbox)
 
-        self.autoHide = QTimer(self)
-        self.autoHide.setInterval(AUTOHIDE_TIMEOUT_MS)
-        self.autoHide.timeout.connect(self.hide)
-        self.autoHide.start()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_status)
+        self.timer.start(1000)
+        self.update_status()
+
+    def update_status(self):
+        if is_powerpoint_in_slideshow():
+            self.led.setColor('green')
+        else:
+            self.led.setColor('red')
 
     def try_send(self, cmd):
-        send_command(cmd)
-        get_server_slide()
-        self.show()
-        self.autoHide.start()
+        if is_powerpoint_in_slideshow():
+            send_command(cmd)
+            get_server_slide()
 
     def enterEvent(self, event):
         self.show()
+
     def leaveEvent(self, event):
-        self.autoHide.start()
+        pass
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
