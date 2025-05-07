@@ -1,99 +1,64 @@
 import socket
-import threading
-import time
 import keyboard
+import time
 import win32com.client
-import pythoncom
 
-# --- CONFIG ---
-SERVER_IP = '10.0.0.2'  # 🔁 CHANGE THIS to your server's IP
-SERVER_PORT = 5051
-SYNC_PORT = 6060
+# === CONFIG ===
+SERVER_IP = '192.168.1.100'  # Change to your server IP
+SERVER_PORT = 505
 
+# === Setup PowerPoint ===
 ppt = win32com.client.Dispatch("PowerPoint.Application")
-ppt.Visible = True
 
-# --- Slide Sync ---
-def go_to_slide(index):
+def get_local_slide():
     try:
-        slide_show = ppt.SlideShowWindows(1)
-        slide_show.View.GotoSlide(index)
-        print(f"[PPT] Moved to slide {index}")
-    except Exception as e:
-        print(f"[PPT ERROR] {e}")
+        return ppt.SlideShowWindows(1).View.CurrentShowPosition
+    except:
+        return -1  # Not in slideshow mode
 
-def get_server_slide():
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(2.0)
-        sock.sendto(b'GET_SLIDE', (SERVER_IP, SERVER_PORT))
-        data, _ = sock.recvfrom(1024)
-        if data.decode().startswith("SLIDE:"):
-            index = int(data.decode().split(":")[1])
-            print(f"[SYNC] Server slide: {index}")
-            go_to_slide(index)
-    except Exception as e:
-        print(f"[SYNC ERROR] {e}")
-
-# --- Send Command ---
-def send_command(cmd):
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(cmd.encode(), (SERVER_IP, SERVER_PORT))
-        print(f"[SEND] {cmd}")
-    except Exception as e:
-        print(f"[UDP ERROR] {e}")
-
-# --- Keyboard Listener ---
-def listen_for_keys():
-    pythoncom.CoInitialize()
-    try:
-        ppt_thread = win32com.client.GetActiveObject("PowerPoint.Application")
-    except Exception as e:
-        print(f"[COM ERROR] {e}")
+def sync_slide(target_slide):
+    current = get_local_slide()
+    if current == -1:
+        print("PowerPoint not in slideshow mode.")
         return
 
-    def on_key(event):
-        print(f"[KEY] {event.name}")
-        if event.name == 'left':
-            send_command('PREV')
-            get_server_slide()
-        elif event.name == 'right':
-            send_command('NEXT')
-            get_server_slide()
+    while current < target_slide:
+        keyboard.press_and_release('right')
+        time.sleep(0.2)
+        current = get_local_slide()
+    while current > target_slide:
+        keyboard.press_and_release('left')
+        time.sleep(0.2)
+        current = get_local_slide()
 
-    keyboard.on_press(on_key)
-    while True:
-        time.sleep(1)
+    print(f"Synced to slide {current}")
 
-# --- Listen for SYNC from server ---
-def listen_for_sync():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('', SYNC_PORT))
-    print(f"[SYNC] Listening on port {SYNC_PORT} for slide updates...")
-
-    while True:
+def send_command(command):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(1.0)
+        sock.sendto(command.encode(), (SERVER_IP, SERVER_PORT))
         try:
-            data, _ = sock.recvfrom(1024)
-            msg = data.decode()
-            if msg.startswith("SLIDE:"):
-                index = int(msg.split(":")[1])
-                try:
-                    current = ppt.SlideShowWindows(1).View.CurrentShowPosition
-                    if index != current:
-                        print(f"[SYNC RECV] Slide {index} → Syncing")
-                        go_to_slide(index)
-                    else:
-                        print(f"[SYNC RECV] Slide {index} (already current)")
-                except Exception as e:
-                    print(f"[SYNC ERROR] {e}")
+            response, _ = sock.recvfrom(1024)
+            target_slide = int(response.decode().strip())
+            print(f"Server says current slide: {target_slide}")
+            sync_slide(target_slide)
+        except socket.timeout:
+            print("No response from server.")
         except Exception as e:
-            print(f"[SYNC ERROR] {e}")
+            print(f"Error syncing: {e}")
 
-# --- MAIN ---
-if __name__ == '__main__':
-    print("[CLIENT] PPT remote with two-way sync started.")
-    threading.Thread(target=listen_for_keys, daemon=True).start()
-    threading.Thread(target=listen_for_sync, daemon=True).start()
-    while True:
-        time.sleep(1)
+print("Ready. Press LEFT/RIGHT to control slides. ESC to quit.")
+
+while True:
+    try:
+        if keyboard.is_pressed('right'):
+            send_command("NEXT")
+            time.sleep(0.3)
+        elif keyboard.is_pressed('left'):
+            send_command("PREV")
+            time.sleep(0.3)
+        elif keyboard.is_pressed('esc'):
+            print("Exiting...")
+            break
+    except:
+        break
