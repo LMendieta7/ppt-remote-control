@@ -1,37 +1,56 @@
 import socket
+import threading
+import pyautogui
+import time
 import win32com.client
-import pythoncom
-import keyboard
 
-# === CONFIG ===
-LISTEN_IP = '0.0.0.0'
-LISTEN_PORT = 505
+# --- CONFIG ---
+UDP_IP = "0.0.0.0"
+UDP_PORT = 5051
+last_known_client = None
 
-# === Initialize COM for PowerPoint control ===
-pythoncom.CoInitialize()
+# --- PowerPoint COM ---
 ppt = win32com.client.Dispatch("PowerPoint.Application")
+ppt.Visible = True
 
-# === UDP Server Setup ===
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((LISTEN_IP, LISTEN_PORT))
-
-print(f"Listening for slide commands on UDP {LISTEN_IP}:{LISTEN_PORT}...")
-
-while True:
+def get_slide_index():
     try:
-        data, addr = sock.recvfrom(1024)
-        command = data.decode().strip().upper()
+        return ppt.SlideShowWindows(1).View.CurrentShowPosition
+    except:
+        return None
 
-        if command == "NEXT":
-            print("Received NEXT -> Simulating Right Arrow")
-            keyboard.press_and_release('right')
-        elif command == "PREV":
-            print("Received PREV -> Simulating Left Arrow")
-            keyboard.press_and_release('left')
-        else:
-            print(f"Unknown command from {addr}: {command}")
-    except KeyboardInterrupt:
-        print("Server stopped.")
-        break
-    except Exception as e:
-        print(f"Error: {e}")
+# --- UDP Listener ---
+def udp_listener():
+    global last_known_client
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((UDP_IP, UDP_PORT))
+    print(f"[SERVER] Listening on {UDP_PORT}...")
+
+    while True:
+        try:
+            data, addr = sock.recvfrom(1024)
+            cmd = data.decode().strip().upper()
+            print(f"[CMD] {cmd} from {addr}")
+
+            if cmd == "NEXT":
+                pyautogui.press('right')
+                last_known_client = addr
+
+            elif cmd == "PREV":
+                pyautogui.press('left')
+                last_known_client = addr
+
+            elif cmd == "GET_SLIDE":
+                index = get_slide_index()
+                if index:
+                    sock.sendto(f"SLIDE:{index}".encode(), addr)
+                    last_known_client = addr
+        except Exception as e:
+            print(f"[SERVER ERROR] {e}")
+
+# --- MAIN ---
+if __name__ == "__main__":
+    threading.Thread(target=udp_listener, daemon=True).start()
+    print("[SERVER] Ready.")
+    while True:
+        time.sleep(1)
