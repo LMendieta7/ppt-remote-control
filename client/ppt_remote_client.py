@@ -4,7 +4,7 @@ import time
 import win32com.client
 
 # === CONFIG ===
-SERVER_IP = '192.168.1.100'  # Change to your server IP
+SERVER_IP = '10.0.0.2'  # Change to your server IP
 SERVER_PORT = 505
 
 # === Setup PowerPoint ===
