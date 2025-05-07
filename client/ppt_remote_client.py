@@ -6,10 +6,10 @@ import win32com.client
 import pythoncom
 
 # --- CONFIG ---
-SERVER_IP = '192.168.1.100'  # CHANGE THIS
+SERVER_IP = '10.0.0.2'  # 🔁 CHANGE THIS to your server's IP
 SERVER_PORT = 5051
+SYNC_PORT = 6060
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 ppt = win32com.client.Dispatch("PowerPoint.Application")
 ppt.Visible = True
 
@@ -38,6 +38,7 @@ def get_server_slide():
 # --- Send Command ---
 def send_command(cmd):
     try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(cmd.encode(), (SERVER_IP, SERVER_PORT))
         print(f"[SEND] {cmd}")
     except Exception as e:
@@ -65,9 +66,34 @@ def listen_for_keys():
     while True:
         time.sleep(1)
 
+# --- Listen for SYNC from server ---
+def listen_for_sync():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('', SYNC_PORT))
+    print(f"[SYNC] Listening on port {SYNC_PORT} for slide updates...")
+
+    while True:
+        try:
+            data, _ = sock.recvfrom(1024)
+            msg = data.decode()
+            if msg.startswith("SLIDE:"):
+                index = int(msg.split(":")[1])
+                try:
+                    current = ppt.SlideShowWindows(1).View.CurrentShowPosition
+                    if index != current:
+                        print(f"[SYNC RECV] Slide {index} → Syncing")
+                        go_to_slide(index)
+                    else:
+                        print(f"[SYNC RECV] Slide {index} (already current)")
+                except Exception as e:
+                    print(f"[SYNC ERROR] {e}")
+        except Exception as e:
+            print(f"[SYNC ERROR] {e}")
+
 # --- MAIN ---
 if __name__ == '__main__':
-    print("[CLIENT] PPT arrow-key control started")
+    print("[CLIENT] PPT remote with two-way sync started.")
     threading.Thread(target=listen_for_keys, daemon=True).start()
+    threading.Thread(target=listen_for_sync, daemon=True).start()
     while True:
         time.sleep(1)
