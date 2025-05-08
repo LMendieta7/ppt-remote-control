@@ -1,6 +1,6 @@
 import socket
 import keyboard
-import time
+import timeex
 import win32com.client
 
 # === CONFIG ===
