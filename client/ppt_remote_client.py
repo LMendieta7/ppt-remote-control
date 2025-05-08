@@ -1,64 +1,50 @@
 import socket
+import threading
 import keyboard
-import timeex
+import time
 import win32com.client
+import pythoncom
 
-# === CONFIG ===
-SERVER_IP = '10.0.0.2'  # Change to your server IP
-SERVER_PORT = 505
+# --- CONFIG ---
+SERVER_IP = "10.0.0.2"  # Replace with your server's IP
+SERVER_PORT = 5051
 
-# === Setup PowerPoint ===
 ppt = win32com.client.Dispatch("PowerPoint.Application")
+ppt.Visible = True
 
-def get_local_slide():
+def go_to_slide(index):
     try:
-        return ppt.SlideShowWindows(1).View.CurrentShowPosition
-    except:
-        return -1  # Not in slideshow mode
+        if ppt.SlideShowWindows.Count > 0:
+            ppt.SlideShowWindows(1).View.GotoSlide(index)
+            print(f"[CLIENT] Synced to slide {index}")
+    except Exception as e:
+        print(f"[CLIENT SYNC ERROR] {e}")
 
-def sync_slide(target_slide):
-    current = get_local_slide()
-    if current == -1:
-        print("PowerPoint not in slideshow mode.")
-        return
-
-    while current < target_slide:
-        keyboard.press_and_release('right')
-        time.sleep(0.2)
-        current = get_local_slide()
-    while current > target_slide:
-        keyboard.press_and_release('left')
-        time.sleep(0.2)
-        current = get_local_slide()
-
-    print(f"Synced to slide {current}")
-
-def send_command(command):
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(1.0)
-        sock.sendto(command.encode(), (SERVER_IP, SERVER_PORT))
-        try:
-            response, _ = sock.recvfrom(1024)
-            target_slide = int(response.decode().strip())
-            print(f"Server says current slide: {target_slide}")
-            sync_slide(target_slide)
-        except socket.timeout:
-            print("No response from server.")
-        except Exception as e:
-            print(f"Error syncing: {e}")
-
-print("Ready. Press LEFT/RIGHT to control slides. ESC to quit.")
-
-while True:
+def send_command_and_sync(cmd):
     try:
-        if keyboard.is_pressed('right'):
-            send_command("NEXT")
-            time.sleep(0.3)
-        elif keyboard.is_pressed('left'):
-            send_command("PREV")
-            time.sleep(0.3)
-        elif keyboard.is_pressed('esc'):
-            print("Exiting...")
-            break
-    except:
-        break
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(2.0)
+        sock.sendto(cmd.encode(), (SERVER_IP, SERVER_PORT))
+        data, _ = sock.recvfrom(1024)
+        if data.decode().startswith("SLIDE:"):
+            index = int(data.decode().split(":")[1])
+            go_to_slide(index)
+    except Exception as e:
+        print(f"[CLIENT NETWORK ERROR] {e}")
+
+def listen_for_keys():
+    pythoncom.CoInitialize()
+    def on_key(event):
+        if event.name == 'left':
+            send_command_and_sync("PREV")
+        elif event.name == 'right':
+            send_command_and_sync("NEXT")
+    keyboard.on_press(on_key)
+    while True:
+        time.sleep(1)
+
+if __name__ == "__main__":
+    threading.Thread(target=listen_for_keys, daemon=True).start()
+    print("[CLIENT] Listening for arrow keys to control server...")
+    while True:
+        time.sleep(1)
