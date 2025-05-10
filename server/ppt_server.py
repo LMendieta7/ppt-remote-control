@@ -15,6 +15,22 @@ print(f"[SERVER] Listening for UDP commands on port {UDP_PORT}...")
 
 # === GLOBAL CLIENT ADDRESS ===
 client_address = None
+exit_requested = threading.Event()   # You can use this flag to stop the thread
+
+def broadcast_discovery():
+    discovery_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    discovery_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+    while not exit_requested.is_set():
+        try:
+            message = b"DISCOVER:PPT_SERVER"
+            # Send to broadcast address on port 5001
+            discovery_socket.sendto(message, ('255.255.255.255', 5001))
+            print("[SERVER] Broadcasting discovery message...")
+        except Exception as e:
+            print(f"[SERVER] Broadcast error: {e}")
+
+        time.sleep(3)  # Broadcast every 3 seconds
 
 # === BACKGROUND THREAD: SEND SLIDE NUMBERS CONTINUOUSLY ===
 def send_slide_number_loop():
@@ -41,6 +57,7 @@ def send_slide_number_loop():
 
 # Start slide number sync thread
 threading.Thread(target=send_slide_number_loop, daemon=True).start()
+threading.Thread(target=broadcast_discovery, daemon=True).start()
 
 # === MAIN LOOP: RECEIVE COMMANDS ===
 while True:

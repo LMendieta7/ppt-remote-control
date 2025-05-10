@@ -1,75 +1,95 @@
 import socket
-import keyboard
 import threading
 import win32com.client
 import time
 import queue
+import sys
 
-# === CONFIGURATION ===
-SERVER_IP = '10.0.0.2'  # Replace with actual IP
+# === CONFIG ===
 UDP_PORT = 5005
-
-# === SETUP ===
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('', 5006))  # local port for receiving
-
-# === Queue for inter-thread slide sync ===
+DISCOVERY_PORT = 5001
 slide_queue = queue.Queue()
+exit_requested = threading.Event()
+SERVER_IP = None
 
-# === PowerPoint COM must stay in main thread ===
+# === Server Discovery ===
+def listen_for_discovery():
+    global SERVER_IP
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', DISCOVERY_PORT))
+    print("[CLIENT] Listening for server broadcast...")
+
+    while SERVER_IP is None and not exit_requested.is_set():
+        try:
+            data, addr = sock.recvfrom(1024)
+            if data.decode().startswith("DISCOVER:PPT_SERVER"):
+                SERVER_IP = addr[0]
+                print(f"[CLIENT] Discovered server at {SERVER_IP}")
+                break
+        except Exception as e:
+            print(f"[CLIENT] Discovery error: {e}")
+
+    sock.close()
+
+listen_for_discovery()
+
+if SERVER_IP is None:
+    print("[CLIENT] No server discovered. Exiting.")
+    sys.exit()
+
+# === UDP Command Socket ===
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(('', 5006))
+
+# === PowerPoint COM Setup ===
 ppt = win32com.client.Dispatch("PowerPoint.Application")
 presentation = ppt.Presentations(1)
-
-# Wait until slideshow is started manually
 while True:
     try:
         slide_show = presentation.SlideShowWindow.View
-        print("[CLIENT] Slideshow detected. Ready to sync.")
+        print("[CLIENT] Slideshow detected.")
         break
     except:
-        print("[CLIENT] Waiting for slideshow to start...")
+        print("[CLIENT] Waiting for slideshow...")
         time.sleep(1)
 
-# === BACKGROUND THREAD to receive slide sync ===
+# === Background listener for slide sync ===
 def udp_listener():
-    while True:
+    while not exit_requested.is_set():
         try:
             data, _ = sock.recvfrom(1024)
-            message = data.decode().strip()
-            if message.startswith("SLIDE:"):
-                slide_num = int(message.split(":")[1])
-                print(f"[CLIENT] Received slide number: {slide_num}")
+            if data.decode().startswith("SLIDE:"):
+                slide_num = int(data.decode().split(":")[1])
                 slide_queue.put(slide_num)
         except Exception as e:
             print(f"[CLIENT] Listener error: {e}")
 
 threading.Thread(target=udp_listener, daemon=True).start()
 
-# === MAIN LOOP: send commands + apply slide sync ===
-print("[CLIENT] Press ← or → to control slides. Press Q to quit.")
-while True:
-    # Process queued slide syncs (safe in main thread)
+# === Main loop (no GUI, no hotkey) ===
+print("[CLIENT] Use ← / → arrow keys to control slides. Press Ctrl+C in terminal to quit.")
+
+while not exit_requested.is_set():
     while not slide_queue.empty():
         try:
             slide_num = slide_queue.get()
             slide_show = presentation.SlideShowWindow.View
             slide_show.GotoSlide(slide_num)
-            print(f"[CLIENT] Synced to slide {slide_num}")
         except Exception as e:
             print(f"[CLIENT] Slide sync error: {e}")
 
-    # Send NEXT/PREV via UDP
-    if keyboard.is_pressed('right'):
-        sock.sendto(b'NEXT', (SERVER_IP, UDP_PORT))
-        while keyboard.is_pressed('right'): pass
+    try:
+        import keyboard
+        if keyboard.is_pressed('right'):
+            sock.sendto(b'NEXT', (SERVER_IP, UDP_PORT))
+            while keyboard.is_pressed('right'): pass
 
-    elif keyboard.is_pressed('left'):
-        sock.sendto(b'PREV', (SERVER_IP, UDP_PORT))
-        while keyboard.is_pressed('left'): pass
+        elif keyboard.is_pressed('left'):
+            sock.sendto(b'PREV', (SERVER_IP, UDP_PORT))
+            while keyboard.is_pressed('left'): pass
 
-    elif keyboard.is_pressed('q'):
-        sock.sendto(b'EXIT', (SERVER_IP, UDP_PORT))
-        print("[CLIENT] Exiting...")
-        break
+    except:
+        pass  # Keyboard may not be installed or usable in some environments
 
-    time.sleep(0.05)  # keep CPU load low
+    time.sleep(0.05)
