@@ -8,6 +8,9 @@ import win32com.client
 # === UDP SETUP ===
 UDP_PORT = 5005
 BUFFER_SIZE = 1024
+DISCOVERY_PORT = 5001
+DISCOVERY_MESSAGE = b"DISCOVER_PPT_SERVER"
+RESPONSE_MESSAGE = b"PPT_SERVER_HERE"
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('', UDP_PORT))
@@ -15,22 +18,20 @@ print(f"[SERVER] Listening for UDP commands on port {UDP_PORT}...")
 
 # === GLOBAL CLIENT ADDRESS ===
 client_address = None
-exit_requested = threading.Event()   # You can use this flag to stop the thread
 
-def broadcast_discovery():
-    discovery_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    discovery_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+def start_discovery_server():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", DISCOVERY_PORT))
+    print(f"[SERVER] Discovery service running on UDP port {DISCOVERY_PORT}")
 
-    while not exit_requested.is_set():
+    while True:
         try:
-            message = b"DISCOVER:PPT_SERVER"
-            # Send to broadcast address on port 5001
-            discovery_socket.sendto(message, ('255.255.255.255', 5001))
-            print("[SERVER] Broadcasting discovery message...")
+            data, addr = sock.recvfrom(1024)
+            if data == DISCOVERY_MESSAGE:
+                print(f"[SERVER] Received discovery request from {addr[0]}")
+                sock.sendto(RESPONSE_MESSAGE, addr)
         except Exception as e:
-            print(f"[SERVER] Broadcast error: {e}")
-
-        time.sleep(3)  # Broadcast every 3 seconds
+            print(f"[SERVER] Error: {e}")
 
 # === BACKGROUND THREAD: SEND SLIDE NUMBERS CONTINUOUSLY ===
 def send_slide_number_loop():
@@ -56,26 +57,33 @@ def send_slide_number_loop():
         time.sleep(3)
 
 # Start slide number sync thread
+threading.Thread(target=start_discovery_server, daemon=True).start()
 threading.Thread(target=send_slide_number_loop, daemon=True).start()
-threading.Thread(target=broadcast_discovery, daemon=True).start()
+
 
 # === MAIN LOOP: RECEIVE COMMANDS ===
-while True:
-    data, addr = sock.recvfrom(BUFFER_SIZE)
-    message = data.decode().strip().upper()
-    client_address = addr  # Save latest sender
-    print(f"[SERVER] Received '{message}' from {addr}")
 
-    if message == 'NEXT':
-        keyboard.press_and_release('right')
+try:
+    while True:
+        data, addr = sock.recvfrom(BUFFER_SIZE)
+        message = data.decode().strip().upper()
+        client_address = addr  # Save latest sender
+        print(f"[SERVER] Received '{message}' from {addr}")
 
-    elif message == 'PREV':
-        keyboard.press_and_release('left')
+        if message == 'NEXT':
+            keyboard.press_and_release('right')
 
-    elif message == 'EXIT':
-        keyboard.press_and_release('esc')
-        print("[SERVER] Exit command received. Shutting down.")
-        break
+        elif message == 'PREV':
+            keyboard.press_and_release('left')
 
-sock.close()
-print("[SERVER] Socket closed.")
+        elif message == 'EXIT':
+            keyboard.press_and_release('esc')
+            print("[SERVER] Exit command received. Shutting down.")
+            break
+
+except KeyboardInterrupt:
+    print("\n[SERVER] Ctrl+C detected. Shutting down.")
+
+finally:
+    sock.close()
+    print("[SERVER] Socket closed.")
