@@ -34,46 +34,13 @@ def start_discovery_server():
         except Exception as e:
             print(f"[SERVER] Error: {e}")
 
-# === BACKGROUND THREAD: SEND SLIDE NUMBERS CONTINUOUSLY ===
-# === SLIDE SYNC THREAD ===
-def send_slide_number_loop():
-    global client_address
-    pythoncom.CoInitialize()
-
-    try:
-        ppt = win32com.client.Dispatch("PowerPoint.Application")
-        time.sleep(1)
-
-        while True:
-            if client_address:
-                try:
-                    if ppt.SlideShowWindows.Count > 0:
-                        slide_show = ppt.SlideShowWindows(1).View
-                        current_slide = slide_show.CurrentShowPosition
-                        message = f"SLIDE:{current_slide}"
-                        sock.sendto(message.encode(), client_address)
-                        print(f"[SERVER] Sent slide number: {current_slide}")
-                    else:
-                        print("[SERVER] No active slideshow.")
-                except Exception as e:
-                    print(f"[SERVER] Slide send error: {e}")
-            time.sleep(3)
-
-    finally:
-        pythoncom.CoUninitialize()
-
-
-# Start slide number sync thread
 threading.Thread(target=start_discovery_server, daemon=True).start()
-threading.Thread(target=send_slide_number_loop, daemon=True).start()
-
-
-
 # === MAIN LOOP: RECEIVE COMMANDS ===
 
 try:
     while True:
         try:
+            ppt = win32com.client.Dispatch("PowerPoint.Application")
             data, addr = sock.recvfrom(BUFFER_SIZE)
             message = data.decode().strip().upper()
             client_address = addr
@@ -85,10 +52,12 @@ try:
             elif message == 'PREV':
                 keyboard.press_and_release('left')
 
-            elif message == 'EXIT':
-                keyboard.press_and_release('esc')
-                print("[SERVER] Exit command received.")
-                break
+            elif message == 'GET_SLIDE':
+                if ppt.SlideShowWindows.Count > 0:
+                    slide_show = ppt.SlideShowWindows(1).View
+                    current_slide = slide_show.CurrentShowPosition
+                    response = f"SLIDE:{current_slide}"
+                    sock.sendto(response.encode(), addr)
 
         except socket.timeout:
             continue  # just loop and check again
