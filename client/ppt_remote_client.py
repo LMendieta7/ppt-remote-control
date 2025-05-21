@@ -35,21 +35,6 @@ while True:
         print("[CLIENT] Waiting for slideshow to start...")
         time.sleep(1)
 
-# === BACKGROUND THREAD: Receive slide sync from server ===
-def udp_listener():
-    while True:
-        try:
-            data, _ = sock.recvfrom(1024)
-            message = data.decode().strip()
-            if message.startswith("SLIDE:"):
-                slide_num = int(message.split(":")[1])
-                slide_queue.put(slide_num)
-        except socket.timeout:
-            continue
-        except Exception as e:
-            print(f"[CLIENT] Listener error: {e}")
-
-threading.Thread(target=udp_listener, daemon=True).start()
 
 # === BACKGROUND THREAD: Poll server every 4 seconds ===
 def poll_slide_sync():
@@ -66,7 +51,7 @@ def poll_slide_sync():
 threading.Thread(target=poll_slide_sync, daemon=True).start()
 
 # === MAIN LOOP: Process slide sync + listen for keys ===
-print("[CLIENT] Press ← or → to control slides. Press Q to quit.")
+print("[CLIENT] Press ← or → to control slides. Press ctrl + c to quit.")
 while True:
     while not slide_queue.empty():
         try:
