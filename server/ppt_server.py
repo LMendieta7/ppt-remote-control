@@ -1,3 +1,4 @@
+# === SERVER CODE ===
 import socket
 import threading
 import time
@@ -21,15 +22,13 @@ slide_tracker_queue = queue.Queue()
 
 print(f"[SERVER] Listening for UDP commands on port {UDP_PORT}...")
 
-# Background thread to track slide changes
 def track_slide_loop():
     while True:
         slide_tracker_queue.put("check_slide")
-        time.sleep(0.5)
+        time.sleep(0.2)
 
 threading.Thread(target=track_slide_loop, daemon=True).start()
 
-# Discovery service
 def start_discovery_server():
     disc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     disc_sock.bind(("0.0.0.0", DISCOVERY_PORT))
@@ -45,13 +44,11 @@ def start_discovery_server():
 
 threading.Thread(target=start_discovery_server, daemon=True).start()
 
-# Main COM thread
 try:
     pythoncom.CoInitialize()
     ppt = win32com.client.Dispatch("PowerPoint.Application")
 
     while True:
-        # Slide tracking (manual updates)
         while not slide_tracker_queue.empty():
             _ = slide_tracker_queue.get()
             try:
@@ -64,35 +61,29 @@ try:
             except Exception as e:
                 print(f"[SERVER] Slide tracking error: {e}")
 
-        # Handle incoming commands
         try:
             data, addr = sock.recvfrom(BUFFER_SIZE)
             message = data.decode().strip().upper()
             client_address = addr
             print(f"[SERVER] Received '{message}' from {addr}")
 
+            if ppt.SlideShowWindows.Count == 0:
+                continue
+
+            view = ppt.SlideShowWindows(1).View
+
             if message == 'NEXT':
-                view = ppt.SlideShowWindows(1).View
                 view.Next()
-                time.sleep(0.3)
-                current_slide = view.CurrentShowPosition
+                sock.sendto(b"ACK:NEXT", client_address)
 
             elif message == 'PREV':
-                view = ppt.SlideShowWindows(1).View
                 view.Previous()
-                time.sleep(0.3)
-                current_slide = view.CurrentShowPosition
+                sock.sendto(b"ACK:PREV", client_address)
 
             elif message == 'GET_SLIDE':
-                if ppt.SlideShowWindows.Count > 0:
-                    view = ppt.SlideShowWindows(1).View
-                    current_slide = view.CurrentShowPosition
-                    response = f"SLIDE:{current_slide}"
-                else:
-                    response = "NOSHOW"
-
-                if client_address:
-                    sock.sendto(response.encode(), client_address)
+                current_slide = view.CurrentShowPosition
+                response = f"SLIDE:{current_slide}"
+                sock.sendto(response.encode(), client_address)
 
         except socket.timeout:
             continue
