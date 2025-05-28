@@ -25,7 +25,7 @@ print(f"[SERVER] Listening for UDP commands on port {UDP_PORT}...")
 def track_slide_loop():
     while True:
         slide_tracker_queue.put("check_slide")
-        time.sleep(0.2)
+        time.sleep(0.3)
 
 threading.Thread(target=track_slide_loop, daemon=True).start()
 

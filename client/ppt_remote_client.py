@@ -1,4 +1,5 @@
 # === CLIENT CODE ===
+import sys
 import socket
 import keyboard
 import threading
@@ -12,7 +13,7 @@ from gui_helper import FloatingControl
 
 SERVER_IP = wait_for_server()
 UDP_PORT = 5005
-POLL_INTERVAL = 2
+POLL_INTERVAL = 3
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('', 5006))
@@ -109,7 +110,14 @@ def start_gui():
         send_and_wait("NEXT")
 
     def on_close():
+        print("[CLIENT] Exiting...")
+        try:
+            sock.close()  # Close the open UDP socket
+        except:
+            pass
         root.destroy()
+        sys.exit(0)  # Fully exit the app
+
 
     FloatingControl(root, on_prev, on_next, on_close)
     root.mainloop()
