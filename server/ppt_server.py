@@ -1,10 +1,10 @@
-# === SERVER CODE ===
 import socket
 import threading
 import time
 import queue
 import pythoncom
 import win32com.client
+import web_server  # ✅ Import the web app module
 
 UDP_PORT = 5005
 DISCOVERY_PORT = 5001
@@ -43,6 +43,9 @@ def start_discovery_server():
             print(f"[SERVER] Discovery error: {e}")
 
 threading.Thread(target=start_discovery_server, daemon=True).start()
+
+# ✅ Start web server in background
+web_server.run()
 
 try:
     pythoncom.CoInitialize()
