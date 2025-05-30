@@ -5,6 +5,7 @@ import queue
 import pythoncom
 import win32com.client
 import web_server  # ✅ Import the web app module
+import qrcode
 
 UDP_PORT = 5005
 DISCOVERY_PORT = 5001
@@ -44,8 +45,29 @@ def start_discovery_server():
 
 threading.Thread(target=start_discovery_server, daemon=True).start()
 
+def print_qr_to_terminal(port=8080):
+    try:
+        # Get local IP
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        url = f"http://{local_ip}:{port}"
+
+        # Generate and print QR code in terminal
+        qr = qrcode.QRCode()
+        qr.add_data(url)
+        qr.make()
+        print(f"\n[SERVER] Web remote available at: {url}")
+        print("[SERVER] Scan this QR code to open on your phone:")
+        print()
+        print()
+        qr.print_ascii()
+        print()
+    except Exception as e:
+        print(f"[QR ERROR] Could not generate QR: {e}")
+
 # ✅ Start web server in background
 web_server.run()
+print_qr_to_terminal(port=8080)
 
 try:
     pythoncom.CoInitialize()

@@ -52,6 +52,9 @@
     <h1>PowerPoint Remote</h1>
     
     <img id="preview" src="/preview.jpg?t={{ ts }}" alt="Slide Preview">
+
+    <p id="slideInfo" style="font-size: 18px; margin-top: 10px;"></p>
+
     <div class="buttons">
         <form action="/prev" method="get"><button>&larr; Prev</button></form>
         <form action="/next" method="get"><button>Next &rarr;</button></form>
@@ -64,6 +67,23 @@
             url.searchParams.set("t", Date.now());
             img.src = url.toString();
         }, 3000); // Every 3 seconds
+    </script>
+
+    <script>
+        function updateSlideInfo() {
+            fetch('/slide_info')
+                .then(response => response.json())
+                .then(data => {
+                    const info = document.getElementById("slideInfo");
+                    if (data.current && data.total) {
+                        info.textContent = `Slide ${data.current} of ${data.total}`;
+                    } else {
+                        info.textContent = "No slideshow running.";
+                    }
+                });
+        }
+        setInterval(updateSlideInfo, 3000);
+        updateSlideInfo(); // initial call
     </script>
 
 </body>

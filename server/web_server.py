@@ -4,6 +4,7 @@ import os
 from PIL import Image
 import win32com.client
 import pythoncom
+from flask import jsonify
 
 # Ensure correct paths to templates and static files
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +24,7 @@ def export_current_slide_as_image(output_path=os.path.join(static_dir, "preview.
         slide = ppt.SlideShowWindows(1).View.Slide
         temp_path = os.path.join(base_dir, "temp_slide.jpg")
         slide.Export(temp_path, "JPG")
-
+                           
         img = Image.open(temp_path)
         img.thumbnail((480, 360))
         img.save(output_path)
@@ -35,6 +36,23 @@ def export_current_slide_as_image(output_path=os.path.join(static_dir, "preview.
         placeholder = os.path.join(static_dir, "placeholder.jpg")
         if os.path.exists(placeholder):
             Image.open(placeholder).save(output_path)
+
+@app.route('/slide_info')
+def slide_info():
+    try:
+        pythoncom.CoInitialize()
+        ppt = win32com.client.Dispatch("PowerPoint.Application")
+        if ppt.SlideShowWindows.Count == 0:
+            return jsonify(current=None, total=None)
+
+        view = ppt.SlideShowWindows(1).View
+        current = view.CurrentShowPosition
+        total = ppt.ActivePresentation.Slides.Count
+        return jsonify(current=current, total=total)
+    
+    except Exception as e:
+        print(f"[WEB] Slide info error: {e}")
+        return jsonify(current=None, total=None)
 
 @app.route('/')
 def index():
