@@ -66,7 +66,7 @@
             const url = new URL("/preview.jpg", window.location.origin);
             url.searchParams.set("t", Date.now());
             img.src = url.toString();
-        }, 3000); // Every 3 seconds
+        }, 1000); // Every 1 seconds
     </script>
 
     <script>
@@ -82,7 +82,7 @@
                     }
                 });
         }
-        setInterval(updateSlideInfo, 3000);
+        setInterval(updateSlideInfo, 1000);
         updateSlideInfo(); // initial call
     </script>
 
