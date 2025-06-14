@@ -1,12 +1,30 @@
+import threading
+import time
+import sys
+import itertools
+
+# Spinner thread function
+# === Spinner setup ===
+spinner_running = True
+def show_spinner(message="Launching PowerPoint Remote, please wait..."):
+    spinner = itertools.cycle(['|', '/', '-', '\\'])
+    while spinner_running:
+        sys.stdout.write(f"\r{message} {next(spinner)}")
+        sys.stdout.flush()
+        time.sleep(0.1)
+    print("\r" + " " * 50 + "\r", end="")  # Clear line
+
+spinner_thread = threading.Thread(target=show_spinner)
+spinner_thread.start()
+# Simulate load time / init logic
+
 import socket
 import keyboard
-import threading
 import win32com.client
-import time
 import queue
 import pythoncom
 import tkinter as tk
-import sys
+import ctypes
 from discovery_helper import wait_for_server
 from gui_helper import FloatingControl
 
@@ -23,6 +41,13 @@ sync_request_flag = threading.Event()
 last_manual_time = time.time()
 current_slide = 0
 running = True  # For clean exit control
+
+def hide_console():
+    if sys.platform == "win32":
+        ctypes.windll.user32.ShowWindow(
+            ctypes.windll.kernel32.GetConsoleWindow(), 0  # 0 = hide
+        )
+
 
 def poll_slide_sync():
     global last_manual_time, current_slide
@@ -158,6 +183,11 @@ def start_gui():
         sys.exit(0)
 
     FloatingControl(root, on_prev, on_next, on_close)
+     # Stop spinner and hide console after GUI loads
+    global spinner_running
+    spinner_running = False
+    time.sleep(1)
+    hide_console()
     root.mainloop()
 
 # Run GUI in main thread to keep terminal responsive and allow clean exit
