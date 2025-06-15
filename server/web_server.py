@@ -1,13 +1,17 @@
 import threading
 from flask import Flask, render_template, redirect, url_for, send_file
 import os
+import sys
 from PIL import Image
 import win32com.client
 import pythoncom
 from flask import jsonify
 
-# Ensure correct paths to templates and static files
-base_dir = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):  # If bundled with PyInstaller
+    base_dir = sys._MEIPASS
+else:
+    base_dir = os.path.abspath(".")
+
 template_dir = os.path.join(base_dir, "templates")
 static_dir = os.path.join(base_dir, "static")
 
